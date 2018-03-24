@@ -24,6 +24,7 @@ GPU mining based on [Wolf9466](https://github.com/OhGodAPet) and [psychocrypt](h
 * Pre-compiled binary has 1% dev donation (donation runs at start rather than after x minutes)
 
 ## Work-in-progress
+* Faster OpenCL compile time (cut startup time in half)
 * Option(s) for automatic fine-tuning of each individual card during mining. This should maximize the utilization of each card and increase the hashrate over time
 
 ## Usage
