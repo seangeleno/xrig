@@ -77,7 +77,7 @@ void OclCLI::autoConf(std::vector<OclThread*> &threads, int *platformIndex, size
         int gpuThreads = 1;
 
         // rx vega
-        if (ctx.deviceName.find("687F") == 0) {
+        if (ctx.deviceName.find("687F") == 0 || ctx.deviceName.find("Radeon RX Vega") == 0) {
             maxThreads = 2024u;
             gpuThreads = 2;
         }
