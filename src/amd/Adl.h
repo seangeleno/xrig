@@ -4,6 +4,8 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <dlfcn.h>
 #endif // _WIN32
 
 #include <vector>
@@ -97,6 +99,8 @@ private:
 
 #ifdef _WIN32
 	HINSTANCE hDLL;
+#else
+	void* hDLL;
 #endif // _WIN32
 
 	std::map<int, ADLODNPerformanceLevelsX2*> systemClocks;

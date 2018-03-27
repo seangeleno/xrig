@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef __linux__
+#define GetProcAddress dlsym
+#endif
+
 #include "adl/include/adl_sdk.h"
 #include "adl/include/adl_structures.h"
 
@@ -41,6 +45,7 @@ Adl::Adl(const std::vector<int> busIds) {
 	context = NULL;
 	lpAdapterInfo = NULL;
 
+	hDLL = NULL;
 #ifdef _WIN32
 	// Load the ADL dll
 	hDLL = LoadLibrary(TEXT("atiadlxx.dll"));
@@ -104,6 +109,19 @@ Adl::Adl(const std::vector<int> busIds) {
 		printf("Failed to get ADL function pointers\n");
 	}
 #endif // _WIN32
+#ifdef __linux__
+	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
+	if (NULL == hDLL)
+	{
+            printf("ADL library not found!\n");
+	    exit(1);
+	}
+
+	ADL_Main_Control_Create = (ADL_MAIN_CONTROL_CREATE) GetProcAddress(hDLL,"ADL_Main_Control_Create");
+	ADL_Main_Control_Destroy = (ADL_MAIN_CONTROL_DESTROY) GetProcAddress(hDLL,"ADL_Main_Control_Destroy");
+	ADL_Adapter_NumberOfAdapters_Get = (ADL_ADAPTER_NUMBEROFADAPTERS_GET) GetProcAddress(hDLL,"ADL_Adapter_NumberOfAdapters_Get");
+	ADL_Adapter_AdapterInfo_Get = (ADL_ADAPTER_ADAPTERINFO_GET) GetProcAddress(hDLL,"ADL_Adapter_AdapterInfo_Get");
+#endif // __linux__
 
 	if (ADL_OK != ADL_Main_Control_Create(ADL_Main_Memory_Alloc, 1))
 	{
@@ -345,4 +363,3 @@ void Adl::tick() {
 		powerLimit[busId] = OverdriveN_PowerLimit_Get(adapterIndex);
 	}
 }
-
