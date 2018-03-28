@@ -123,6 +123,7 @@ static struct option const config_options[] = {
     { "background",       0, nullptr, 'b'  },
     { "log",              1, nullptr, 'l'  },
     { "platform_index",   1, nullptr, 1400 },
+    { "intensity",        1, nullptr, 1401 },
     { "syslog",           0, nullptr, 's'  },
     { 0, 0, 0, 0 }
 };

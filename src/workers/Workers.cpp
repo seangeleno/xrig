@@ -260,7 +260,7 @@ void Workers::onResult(uv_async_t *handle)
             }
 
             if (baton->errors > 0 && !baton->jobs.empty()) {
-                LOG_ERR("GPU #%d COMPUTE ERROR", baton->jobs[0].threadId());
+                LOG_ERR("THREAD #%d COMPUTE ERROR", baton->jobs[0].threadId());
             }
 
             delete baton;
