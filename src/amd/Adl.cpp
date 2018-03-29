@@ -13,6 +13,7 @@
 
 #include "Adl.h"
 #include "Options.h"
+#include "log/Log.h"
 
 
 // Memory allocation function
@@ -58,7 +59,7 @@ Adl::Adl(const std::vector<int> busIds) {
 	
 	if (NULL == hDLL)
 	{
-		printf("Failed to load ADL library\n");
+		LOG_ERR("Failed to load ADL library\n");
 	}
 
 	ADL_Main_Control_Create = (ADL_MAIN_CONTROL_CREATE) GetProcAddress(hDLL,"ADL_Main_Control_Create");
@@ -106,14 +107,14 @@ Adl::Adl(const std::vector<int> busIds) {
 		NULL == ADL2_Overdrive_Caps
 		)
 	{
-		printf("Failed to get ADL function pointers\n");
+		LOG_ERR("Failed to get ADL function pointers");
 	}
 #endif // _WIN32
 #ifdef __linux__
 	hDLL = dlopen( "libatiadlxx.so", RTLD_LAZY|RTLD_GLOBAL);
 	if (NULL == hDLL)
 	{
-            printf("ADL library not found!\n");
+            LOG_ERR("ADL library not found!");
 	    exit(1);
 	}
 
@@ -125,7 +126,7 @@ Adl::Adl(const std::vector<int> busIds) {
 
 	if (ADL_OK != ADL_Main_Control_Create(ADL_Main_Memory_Alloc, 1))
 	{
-		printf("ADL_Main_Control_Create failed\n");
+		LOG_ERR("ADL_Main_Control_Create failed");
 	}
 
 	int iNumberAdapters = 0;
@@ -133,7 +134,7 @@ Adl::Adl(const std::vector<int> busIds) {
 	// Obtain the number of adapters for the system
 	if (ADL_OK != ADL_Adapter_NumberOfAdapters_Get(&iNumberAdapters))
 	{
-		printf("ADL_Adapter_NumberOfAdapters_Get failed\n");
+		LOG_ERR("ADL_Adapter_NumberOfAdapters_Get failed");
 	}
 	
 	if (0 < iNumberAdapters)
@@ -212,7 +213,7 @@ ADLODNPerformanceLevelsX2* Adl::OverdriveN_SystemClocksX2_Get(int adapterIndex) 
 	odNPerformanceLevels->iNumberOfPerformanceLevels = ADL_PERFORMANCE_LEVELS;
 
 	if (ADL_OK != ADL2_OverdriveN_SystemClocksX2_Get(context, adapterIndex, odNPerformanceLevels)) {
-		printf("ADL2_OverdriveN_SystemClocksX2_Get failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_SystemClocksX2_Get failed. adapterIndex: %d", adapterIndex);
 	}
 
 	return odNPerformanceLevels;
@@ -229,7 +230,7 @@ ADLODNPerformanceLevelsX2* Adl::OverdriveN_MemoryClocksX2_Get(int adapterIndex) 
 	odNPerformanceLevels->iNumberOfPerformanceLevels = ADL_PERFORMANCE_LEVELS;
 
 	if (ADL_OK != ADL2_OverdriveN_MemoryClocksX2_Get(context, adapterIndex, odNPerformanceLevels)) {
-		printf("ADL2_OverdriveN_MemoryClocksX2_Get failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_MemoryClocksX2_Get failed. adapterIndex: %d", adapterIndex);
 	}
 
 	return odNPerformanceLevels;
@@ -245,7 +246,7 @@ ADLODNFanControl* Adl::OverdriveN_FanControl_Get(int adapterIndex) {
 
 	if (ADL_OK != ADL2_OverdriveN_FanControl_Get(context, adapterIndex, odNFanControl))
 	{
-		printf("ADL2_OverdriveN_FanControl_Get failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_FanControl_Get failed. adapterIndex: %d", adapterIndex);
 	}
 
 	return odNFanControl;
@@ -261,7 +262,7 @@ ADLODNPerformanceStatus* Adl::OverdriveN_PerformanceStatus_Get(int adapterIndex)
 
 	if (ADL_OK != ADL2_OverdriveN_PerformanceStatus_Get(context, adapterIndex, odNPerformanceStatus))
 	{
-		printf("ADL2_OverdriveN_PerformanceStatus_Get failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_PerformanceStatus_Get failed. adapterIndex: %d", adapterIndex);
 	}
 
 	return odNPerformanceStatus;
@@ -276,7 +277,7 @@ ADLODNPowerLimitSetting* Adl::OverdriveN_PowerLimit_Get(int adapterIndex) {
 	odNPowerControl = (ADLODNPowerLimitSetting*)odNPowerControlBuffer;
 
 	if (ADL_OK != ADL2_OverdriveN_PowerLimit_Get(context, adapterIndex, odNPowerControl)) {
-		printf("ADL2_OverdriveN_PowerLimit_Get failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_PowerLimit_Get failed. adapterIndex: %d", adapterIndex);
 	}
 
 	return odNPowerControl;
@@ -286,7 +287,7 @@ int Adl::OverdriveN_Temperature_Get(int adapterIndex) {
 	int temp = 0;
 
 	if (ADL_OK != ADL2_OverdriveN_Temperature_Get(context, adapterIndex, 1, &temp)) {
-		printf("ADL2_OverdriveN_Temperature_Get failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_Temperature_Get failed. adapterIndex: %d", adapterIndex);
 	}
 
 	return temp;
@@ -296,16 +297,14 @@ void Adl::setSystemClock(int adapterIndex, int level, int clock, int vddc) {
 	ADLODNPerformanceLevelsX2* odNPerformanceLevels = OverdriveN_SystemClocksX2_Get(adapterIndex);
 
 	if (level > ADL_PERFORMANCE_LEVELS || level < 0) {
-		printf("Invalid performance level");			
-	} else if (odNPerformanceLevels->aLevels[level].iEnabled == 0) {
-		printf("Performance level (%d) is disabled\n", level);			
-	} else {
+		LOG_ERR("Invalid performance level: %d", level);			
+	} else if (odNPerformanceLevels->aLevels[level].iEnabled == 1) {
 		odNPerformanceLevels->aLevels[level].iClock = clock;
 		odNPerformanceLevels->aLevels[level].iVddc = vddc;
 		odNPerformanceLevels->iMode = ADLODNControlType::ODNControlType_Manual;
 
 		if (ADL_OK != ADL2_OverdriveN_SystemClocksX2_Set(context, adapterIndex, odNPerformanceLevels)) {
-			printf("ADL2_OverdriveN_SystemClocksX2_Set failed. adapterIndex: %d\n", adapterIndex);
+			LOG_ERR("ADL2_OverdriveN_SystemClocksX2_Set failed. adapterIndex: %d", adapterIndex);
 		}
 	}
 }
@@ -314,16 +313,14 @@ void Adl::setMemoryClock(int adapterIndex, int level, int clock, int vddc) {
 	ADLODNPerformanceLevelsX2* odNPerformanceLevels = OverdriveN_MemoryClocksX2_Get(adapterIndex);
 
 	if (level > ADL_PERFORMANCE_LEVELS || level < 0) {
-		printf("Invalid performance level");			
-	} else if (odNPerformanceLevels->aLevels[level].iEnabled == 0) {
-		printf("Performance level (%d) is disabled\n", level);			
-	} else {
+		LOG_ERR("Invalid performance level: %d", level);			
+	} else if (odNPerformanceLevels->aLevels[level].iEnabled == 1) {
 		odNPerformanceLevels->aLevels[level].iClock = clock;
 		odNPerformanceLevels->aLevels[level].iVddc = vddc;
 		odNPerformanceLevels->iMode = ADLODNControlType::ODNControlType_Manual;
 
 		if (ADL_OK != ADL2_OverdriveN_MemoryClocksX2_Set(context, adapterIndex, odNPerformanceLevels)) {
-			printf("ADL2_OverdriveN_MemoryClocksX2_Set failed. adapterIndex: %d\n", adapterIndex);
+			LOG_ERR("ADL2_OverdriveN_MemoryClocksX2_Set failed. adapterIndex: %d", adapterIndex);
 		}
 	}
 }
@@ -335,7 +332,7 @@ void Adl::setPowerLimit(int adapterIndex, int powerLimit) {
 	odNPowerControl->iMode = ADLODNControlType::ODNControlType_Manual;
 
 	if (ADL_OK != ADL2_OverdriveN_PowerLimit_Set(context, adapterIndex, odNPowerControl)) {
-		printf("ADL2_OverdriveN_PowerLimit_Set failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_PowerLimit_Set failed. adapterIndex: %d", adapterIndex);
 	}
 }
 
@@ -346,7 +343,7 @@ void Adl::setFanControl(int adapterIndex, int targetTemp) {
 	odNFanControl->iMode = ADLODNControlType::ODNControlType_Manual;
 
 	if (ADL_OK != ADL2_OverdriveN_FanControl_Set(context, adapterIndex, odNFanControl)) {
-		printf("ADL2_OverdriveN_FanControl_Set failed. adapterIndex: %d\n", adapterIndex);
+		LOG_ERR("ADL2_OverdriveN_FanControl_Set failed. adapterIndex: %d", adapterIndex);
 	}
 }
 
