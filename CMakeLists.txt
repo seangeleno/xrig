@@ -10,6 +10,7 @@ include (CheckIncludeFile)
 
 set(HEADERS
     src/3rdparty/align.h
+    src/3rdparty/sha256.h
     src/amd/cryptonight.h
     src/amd/Adl.h
     src/amd/GpuContext.h
@@ -69,6 +70,7 @@ set(HEADERS_CRYPTO
    )
 
 set(SOURCES
+    src/3rdparty/sha256.cpp
     src/api/Api.cpp
     src/api/ApiState.cpp
     src/api/NetworkState.cpp

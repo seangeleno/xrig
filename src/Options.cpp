@@ -179,8 +179,6 @@ Options *Options::parse(int argc, char **argv)
 
 bool Options::oclInit()
 {
-    LOG_WARN("Compiling code and initializing GPUs...");
-
     if (m_threads.empty() && !m_oclCLI.setup(m_threads)) {
         m_oclCLI.autoConf(m_threads, &m_platformIndex, &m_intensity);
     }

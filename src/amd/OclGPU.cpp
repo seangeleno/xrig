@@ -22,27 +22,11 @@
  *   along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
-
-
-static inline void port_sleep(size_t sec)
-{
-    Sleep(sec * 1000);
-}
-#else
-#include <unistd.h>
-
-static inline void port_sleep(size_t sec)
-{
-    sleep(sec);
-}
-#endif // _WIN32
-
 
 #include <algorithm>
 #include <cassert>
+#include <fstream>
+#include <sstream>
 #include <iostream>
 #include <math.h>
 #include <regex>
@@ -56,6 +40,36 @@ static inline void port_sleep(size_t sec)
 #include "cryptonight.h"
 #include "log/Log.h"
 #include "Options.h"
+#include "3rdparty/sha256.h"
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+
+static inline void port_sleep(size_t sec)
+{
+    Sleep(sec * 1000);
+}
+
+static inline void create_directory(std::string dirname)
+{
+    _mkdir(dirname.data());
+}
+
+#else
+#include <unistd.h>
+
+static inline void port_sleep(size_t sec)
+{
+    sleep(sec);
+}
+
+static inline void create_directory(std::string dirname)
+{
+    mkdir(dirname.data(), 0744);
+}
+
+#endif // _WIN32
 
 #if defined(__APPLE__)
 #   include <OpenCL/cl_ext.h>
@@ -364,42 +378,140 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx, const ch
 
     char options[256];
     snprintf(options, sizeof(options), "-DITERATIONS=%d -DMASK=%d -DWORKSIZE=%zu", hasIterations, threadMemMask, ctx->workSize);
-    ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, options, NULL, NULL);
-    if (ret != CL_SUCCESS) {
-        size_t len;
-        LOG_ERR("Error %s when calling clBuildProgram.", err_to_str(ret));
+    
+    // create cache key from source, options and gpu name
+    std::string src_str(source_code);
+    src_str += options;
+    src_str += ctx->deviceName.data();
+    std::string hash_hex_str = sha256(src_str);
 
-        if ((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, 0, NULL, &len)) != CL_SUCCESS) {
-            LOG_ERR("Error %s when calling clGetProgramBuildInfo for length of build log output.", err_to_str(ret));
-            return OCL_ERR_API;
-        }
-
-        char* BuildLog = (char*)malloc(len + 1);
-        BuildLog[0] = '\0';
-
-        if ((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, len, BuildLog, NULL)) != CL_SUCCESS) {
-            free(BuildLog);
-            LOG_ERR("Error %s when calling clGetProgramBuildInfo for build log.", err_to_str(ret));
-            return OCL_ERR_API;
-        }
-        
-        Log::i()->text("Build log:");
-        std::cerr << BuildLog << std::endl;
-
-        free(BuildLog);
-        return OCL_ERR_API;
-    }
-
-    cl_build_status status;
-    do
+    std::string cache_file = "./cache/" + hash_hex_str + ".bin";
+    std::ifstream clBinFile(cache_file, std::ofstream::in | std::ofstream::binary);
+    if(!clBinFile.good())
     {
-        if ((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, NULL)) != CL_SUCCESS) {
-            LOG_ERR("Error %s when calling clGetProgramBuildInfo for status of build.", err_to_str(ret));
+        LOG_INFO("OpenCL device %u - Compiling code",ctx->deviceIdx);
+        ctx->Program = clCreateProgramWithSource(opencl_ctx, 1, (const char**)&source_code, NULL, &ret);
+        if(ret != CL_SUCCESS)
+        {
+            LOG_ERR("Error %s when calling clCreateProgramWithSource on the OpenCL miner code", err_to_str(ret));
             return OCL_ERR_API;
         }
-        port_sleep(1);
+
+        ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, options, NULL, NULL);
+        if(ret != CL_SUCCESS)
+        {
+            size_t len;
+            LOG_ERR("Error %s when calling clBuildProgram.", err_to_str(ret));
+
+            if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, 0, NULL, &len)) != CL_SUCCESS)
+            {
+                LOG_ERR("Error %s when calling clGetProgramBuildInfo for length of build log output.", err_to_str(ret));
+                return OCL_ERR_API;
+            }
+
+            char* BuildLog = (char*)malloc(len + 1);
+            BuildLog[0] = '\0';
+
+            if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, len, BuildLog, NULL)) != CL_SUCCESS)
+            {
+                free(BuildLog);
+                LOG_ERR("Error %s when calling clGetProgramBuildInfo for build log.", err_to_str(ret));
+                return OCL_ERR_API;
+            }
+
+            LOG_ERR("Build log:\n");
+            std::cerr<<BuildLog<<std::endl;
+
+            free(BuildLog);
+            return OCL_ERR_API;
+        }
+
+        cl_uint num_devices;
+        clGetProgramInfo(ctx->Program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &num_devices,NULL);
+
+
+        std::vector<cl_device_id> devices_ids(num_devices);
+        clGetProgramInfo(ctx->Program, CL_PROGRAM_DEVICES, sizeof(cl_device_id)* devices_ids.size(), devices_ids.data(),NULL);
+        int dev_id = 0;
+        /* Search for the gpu within the program context.
+         * The id can be different to  ctx->DeviceID.
+         */
+        for(auto & ocl_device : devices_ids)
+        {
+            if(ocl_device == ctx->DeviceID)
+                break;
+            dev_id++;
+        }
+
+        cl_build_status status;
+        do
+        {
+            if((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, NULL)) != CL_SUCCESS)
+            {
+                LOG_ERR("Error %s when calling clGetProgramBuildInfo for status of build.", err_to_str(ret));
+                return OCL_ERR_API;
+            }
+            port_sleep(1);
+        }
+        while(status == CL_BUILD_IN_PROGRESS);
+
+        std::vector<size_t> binary_sizes(num_devices);
+        clGetProgramInfo (ctx->Program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t) * binary_sizes.size(), binary_sizes.data(), NULL);
+
+        std::vector<char*> all_programs(num_devices);
+        std::vector<std::vector<char>> program_storage;
+
+        int p_id = 0;
+        size_t mem_size = 0;
+        // create memory  structure to query all OpenCL program binaries
+        for(auto & p : all_programs)
+        {
+            program_storage.emplace_back(std::vector<char>(binary_sizes[p_id]));
+            all_programs[p_id] = program_storage[p_id].data();
+            mem_size += binary_sizes[p_id];
+            p_id++;
+        }
+
+        if( ret = clGetProgramInfo(ctx->Program, CL_PROGRAM_BINARIES, num_devices * sizeof(char*), all_programs.data(),NULL) != CL_SUCCESS)
+        {
+            LOG_ERR("Error %s when calling clGetProgramInfo.", err_to_str(ret));
+            return OCL_ERR_API;
+        }
+
+        std::ofstream file_stream;
+        std::cout<<"./cache/" + hash_hex_str + ".bin"<<std::endl;
+        file_stream.open(cache_file, std::ofstream::out | std::ofstream::binary);
+        file_stream.write(all_programs[dev_id], binary_sizes[dev_id]);
+        file_stream.close();
+        LOG_DEBUG("OpenCL device %u - OpenCL binary file stored in file %s.",ctx->deviceIdx, cache_file.c_str());
     }
-    while(status == CL_BUILD_IN_PROGRESS);
+    else
+    {
+        LOG_DEBUG("OpenCL device %u - Load OpenCL binary file %s",ctx->deviceIdx, cache_file.c_str());
+        std::ostringstream ss;
+        ss << clBinFile.rdbuf();
+        std::string s = ss.str();
+
+        size_t bin_size = s.size();
+        auto data_ptr = s.data();
+
+        cl_int clStatus;
+        ctx->Program = clCreateProgramWithBinary(
+            opencl_ctx, 1, &ctx->DeviceID, &bin_size,
+            (const unsigned char **)&data_ptr, &clStatus, &ret
+        );
+        if(ret != CL_SUCCESS)
+        {
+            LOG_ERR("Error %s when calling clCreateProgramWithBinary. Try to delete file %s", err_to_str(ret), cache_file.c_str());
+            return OCL_ERR_API;
+        }
+        ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, NULL, NULL, NULL);
+        if(ret != CL_SUCCESS)
+        {
+            LOG_ERR("Error %s when calling clBuildProgram. Try to delete file %s", err_to_str(ret), cache_file.c_str());
+            return OCL_ERR_API;
+        }
+    }
 
     const char *KernelNames[] = { "cn0", "cn1", "cn2", "Blake", "Groestl", "JH", "Skein" };
     for(int i = 0; i < 7; ++i) {
@@ -644,6 +756,8 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
     source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_JH"), jhCL);
     source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_BLAKE256"), blake256CL);
     source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_GROESTL256"), groestl256CL);
+
+    create_directory("./cache");
 
     for (int i = 0; i < num_gpus; ++i) {
         if ((ret = InitOpenCLGpu(i, opencl_ctx, &ctx[i], source_code.c_str())) != OCL_ERR_SUCCESS) {
