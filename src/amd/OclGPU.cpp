@@ -644,19 +644,21 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 
     const char *KernelNames[] = { "cn0", "cn1", "cn2", "Blake", "Groestl", "JH", "Skein" };
 
-    for (int i = 0; i < num_gpus; ++i) {
-        if (i > 0) {
-			ctx[i].Program = ctx[0].Program;
+    for(int k = 0; k < 7; ++k) {
+        ctx[0].Kernels[k] = clCreateKernel(ctx[0].Program, KernelNames[k], &ret);
+        if (ret != CL_SUCCESS) {
+            LOG_ERR("Error %s when calling clCreateKernel for kernel %s.", err_to_str(ret), KernelNames[k]);
+            return OCL_ERR_API;
         }
+    }
 
-		for (int k = 0; k < 7; ++k) {
-			ctx[i].Kernels[k] = clCreateKernel(ctx[i].Program, KernelNames[k], &ret);
-			if (ret != CL_SUCCESS) {
-				LOG_ERR("Error %s when calling clCreateKernel for kernel %s.", err_to_str(ret), KernelNames[k]);
-				return OCL_ERR_API;
-			}
-		}
-
+    for (int i = 0; i < num_gpus; ++i) {
+        ctx[i].Program = ctx[0].Program;
+        if (i > 0) {
+            for(int k = 0; k < 7; ++k) {
+                ctx[i].Kernels[k] = ctx[0].Kernels[k];
+            }
+        }
         if ((ret = InitOpenCLGpu(i, opencl_ctx, &ctx[i])) != OCL_ERR_SUCCESS) {
             return ret;
         }
