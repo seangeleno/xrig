@@ -42,6 +42,13 @@
 #include "Options.h"
 #include "3rdparty/sha256.h"
 
+#if defined _MSC_VER
+#include <direct.h>
+#elif defined __GNUC__
+#include <sys/types.h>
+#include <sys/stat.h>
+#endif
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <windows.h>
