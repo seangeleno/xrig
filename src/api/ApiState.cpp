@@ -23,7 +23,6 @@
 
 #include <math.h>
 #include <string.h>
-#include <time.h>
 #include <uv.h>
 #include <map>
 #include <vector>
@@ -75,18 +74,10 @@ static inline double normalize3(double d)
 }
 
 
-static inline time_t now()
-{
-    auto now = std::chrono::system_clock::now();
-    return std::chrono::system_clock::to_time_t( now );
-}
-
-
 ApiState::ApiState()
 {
     m_threads  = (int) Options::i()->threads().size();
     m_hashrate = new double[m_threads * 3]();
-    m_start = now();
 
     memset(m_totalHashrate, 0, sizeof(m_totalHashrate));
     memset(m_id, 0, sizeof(m_id));
@@ -287,7 +278,7 @@ void ApiState::getMiner(rapidjson::Document &doc) const
 
     doc.AddMember("version",      rapidjson::StringRef(Platform::versionString()), allocator);
     doc.AddMember("algo",         rapidjson::StringRef(Options::i()->algoName()), allocator);
-    doc.AddMember("uptime",       difftime(now(), m_start), allocator);
+    doc.AddMember("uptime",       Workers::uptime(), allocator);
 }
 
 

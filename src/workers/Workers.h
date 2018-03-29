@@ -57,6 +57,7 @@ public:
     static inline uint64_t sequence()                            { return m_sequence.load(std::memory_order_relaxed); }
     static inline void pause()                                   { m_active = false; m_paused = 1; m_sequence++; }
     static inline void setListener(IJobResultListener *listener) { m_listener = listener; }
+    static inline uint32_t uptime()                              { return (uv_now(uv_default_loop()) - m_start) / 1000; }
 
     static const std::vector<Handle*> &handles()                 { return m_handles; }
     static const std::map<int, std::vector<Handle*>> &gpus()     { return m_gpus; }
@@ -83,6 +84,7 @@ private:
     static uv_rwlock_t m_rwlock;
     static uv_timer_t m_reportTimer;
     static uv_timer_t m_timer;
+    static uint64_t m_start;
 };
 
 

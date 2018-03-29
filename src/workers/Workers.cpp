@@ -60,6 +60,7 @@ uv_mutex_t Workers::m_mutex;
 uv_rwlock_t Workers::m_rwlock;
 uv_timer_t Workers::m_reportTimer;
 uv_timer_t Workers::m_timer;
+uint64_t Workers::m_start;
 
 
 static std::vector<GpuContext> contexts;
@@ -81,6 +82,8 @@ struct JobBaton
 
 bool Workers::start(const std::vector<OclThread*> &threads)
 {
+    m_start = uv_now(uv_default_loop());
+
     std::vector<int> busIds;
     const size_t count = threads.size();
     m_hashrate = new Hashrate((int) count);

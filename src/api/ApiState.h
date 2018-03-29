@@ -26,8 +26,6 @@
 
 
 #include <vector>
-#include <chrono>
-#include <time.h>
 
 
 #include "api/NetworkState.h"
@@ -61,7 +59,6 @@ private:
     double *m_hashrate;
     double m_highestHashrate;
     double m_totalHashrate[3];
-    time_t m_start;
     int m_threads;
     NetworkState m_network;
 };
