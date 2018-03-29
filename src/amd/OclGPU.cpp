@@ -260,7 +260,7 @@ inline static bool setKernelArgFromExtraBuffers(GpuContext *ctx, size_t kernel, 
 }
 
 
-size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx)
+size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx, const char* source_code)
 {
     size_t MaximumWorkSize;
     cl_int ret;
@@ -285,14 +285,6 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx)
     ctx->CommandQueues = clCreateCommandQueue(opencl_ctx, ctx->DeviceID, CommandQueueProperties, &ret);
 #   endif
 
-    size_t hashMemSize = MONERO_MEMORY;
-
-#   if !defined(XMRIG_NO_AEON)
-    if (Options::i()->algo() == Options::ALGO_CRYPTONIGHT_LITE) {
-        hashMemSize   = AEON_MEMORY;
-    }
-#   endif
-
     if (ret != CL_SUCCESS) {
         LOG_ERR("Error %s when calling clCreateCommandQueueWithProperties.", err_to_str(ret));
         return OCL_ERR_API;
@@ -303,6 +295,18 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx)
         LOG_ERR("Error %s when calling clCreateBuffer to create input buffer.", err_to_str(ret));
         return OCL_ERR_API;
     }
+
+    size_t hashMemSize = MONERO_MEMORY;
+    int threadMemMask  = MONERO_MASK;
+    int hasIterations  = MONERO_ITER;
+
+#   if !defined(XMRIG_NO_AEON)
+    if (Options::i()->algo() == Options::ALGO_CRYPTONIGHT_LITE) {
+        hashMemSize   = AEON_MEMORY;
+        threadMemMask = AEON_MASK;
+        hasIterations = AEON_ITER;
+    }
+#   endif
 
     size_t g_thd = ctx->rawIntensity;
     ctx->ExtraBuffers[0] = clCreateBuffer(opencl_ctx, CL_MEM_READ_WRITE, hashMemSize * g_thd, NULL, &ret);
@@ -350,6 +354,60 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx)
     if (ret != CL_SUCCESS) {
         LOG_ERR("Error %s when calling clCreateBuffer to create output buffer.", err_to_str(ret));
         return OCL_ERR_API;
+    }
+
+    ctx->Program = clCreateProgramWithSource(opencl_ctx, 1, (const char**)&source_code, NULL, &ret);
+    if (ret != CL_SUCCESS) {
+        LOG_ERR("Error %s when calling clCreateProgramWithSource on the contents of cryptonight.cl", err_to_str(ret));
+        return OCL_ERR_API;
+    }
+
+    char options[256];
+    snprintf(options, sizeof(options), "-DITERATIONS=%d -DMASK=%d -DWORKSIZE=%zu", hasIterations, threadMemMask, ctx->workSize);
+    ret = clBuildProgram(ctx->Program, 1, &ctx->DeviceID, options, NULL, NULL);
+    if (ret != CL_SUCCESS) {
+        size_t len;
+        LOG_ERR("Error %s when calling clBuildProgram.", err_to_str(ret));
+
+        if ((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, 0, NULL, &len)) != CL_SUCCESS) {
+            LOG_ERR("Error %s when calling clGetProgramBuildInfo for length of build log output.", err_to_str(ret));
+            return OCL_ERR_API;
+        }
+
+        char* BuildLog = (char*)malloc(len + 1);
+        BuildLog[0] = '\0';
+
+        if ((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_LOG, len, BuildLog, NULL)) != CL_SUCCESS) {
+            free(BuildLog);
+            LOG_ERR("Error %s when calling clGetProgramBuildInfo for build log.", err_to_str(ret));
+            return OCL_ERR_API;
+        }
+        
+        Log::i()->text("Build log:");
+        std::cerr << BuildLog << std::endl;
+
+        free(BuildLog);
+        return OCL_ERR_API;
+    }
+
+    cl_build_status status;
+    do
+    {
+        if ((ret = clGetProgramBuildInfo(ctx->Program, ctx->DeviceID, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, NULL)) != CL_SUCCESS) {
+            LOG_ERR("Error %s when calling clGetProgramBuildInfo for status of build.", err_to_str(ret));
+            return OCL_ERR_API;
+        }
+        port_sleep(1);
+    }
+    while(status == CL_BUILD_IN_PROGRESS);
+
+    const char *KernelNames[] = { "cn0", "cn1", "cn2", "Blake", "Groestl", "JH", "Skein" };
+    for(int i = 0; i < 7; ++i) {
+        ctx->Kernels[i] = clCreateKernel(ctx->Program, KernelNames[i], &ret);
+        if (ret != CL_SUCCESS) {
+            LOG_ERR("Error %s when calling clCreateKernel for kernel %s.", err_to_str(ret), KernelNames[i]);
+            return OCL_ERR_API;
+        }
     }
 
     ctx->Nonce = 0;
@@ -587,79 +645,8 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
     source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_BLAKE256"), blake256CL);
     source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_GROESTL256"), groestl256CL);
 
-    ctx[0].Program = clCreateProgramWithSource(opencl_ctx, 1, (const char**)&source_code, NULL, &ret);
-    if (ret != CL_SUCCESS) {
-        LOG_ERR("Error %s when calling clCreateProgramWithSource on the contents of cryptonight.cl", err_to_str(ret));
-        return OCL_ERR_API;
-    }
-
-    int threadMemMask  = MONERO_MASK;
-    int hasIterations  = MONERO_ITER;
-
-#   if !defined(XMRIG_NO_AEON)
-    if (Options::i()->algo() == Options::ALGO_CRYPTONIGHT_LITE) {
-        threadMemMask = AEON_MASK;
-        hasIterations = AEON_ITER;
-    }
-#   endif
-
-    char options[256];
-    snprintf(options, sizeof(options), "-DITERATIONS=%d -DMASK=%d -DWORKSIZE=%zu", hasIterations, threadMemMask, ctx[0].workSize);
-    ret = clBuildProgram(ctx[0].Program, 0, NULL, options, NULL, NULL);
-    if (ret != CL_SUCCESS) {
-        size_t len;
-        LOG_ERR("Error %s when calling clBuildProgram.", err_to_str(ret));
-
-        if ((ret = clGetProgramBuildInfo(ctx[0].Program, ctx[0].DeviceID, CL_PROGRAM_BUILD_LOG, 0, NULL, &len)) != CL_SUCCESS) {
-            LOG_ERR("Error %s when calling clGetProgramBuildInfo for length of build log output.", err_to_str(ret));
-            return OCL_ERR_API;
-        }
-
-        char* BuildLog = (char*)malloc(len + 1);
-        BuildLog[0] = '\0';
-
-        if ((ret = clGetProgramBuildInfo(ctx[0].Program, ctx[0].DeviceID, CL_PROGRAM_BUILD_LOG, len, BuildLog, NULL)) != CL_SUCCESS) {
-            free(BuildLog);
-            LOG_ERR("Error %s when calling clGetProgramBuildInfo for build log.", err_to_str(ret));
-            return OCL_ERR_API;
-        }
-        
-        Log::i()->text("Build log:");
-        std::cerr << BuildLog << std::endl;
-
-        free(BuildLog);
-        return OCL_ERR_API;
-    }
-
-    cl_build_status status;
-    do
-    {
-        if ((ret = clGetProgramBuildInfo(ctx[0].Program, ctx[0].DeviceID, CL_PROGRAM_BUILD_STATUS, sizeof(cl_build_status), &status, NULL)) != CL_SUCCESS) {
-            LOG_ERR("Error %s when calling clGetProgramBuildInfo for status of build.", err_to_str(ret));
-            return OCL_ERR_API;
-        }
-        port_sleep(1);
-    }
-    while(status == CL_BUILD_IN_PROGRESS);
-
-    const char *KernelNames[] = { "cn0", "cn1", "cn2", "Blake", "Groestl", "JH", "Skein" };
-
-    for(int k = 0; k < 7; ++k) {
-        ctx[0].Kernels[k] = clCreateKernel(ctx[0].Program, KernelNames[k], &ret);
-        if (ret != CL_SUCCESS) {
-            LOG_ERR("Error %s when calling clCreateKernel for kernel %s.", err_to_str(ret), KernelNames[k]);
-            return OCL_ERR_API;
-        }
-    }
-
     for (int i = 0; i < num_gpus; ++i) {
-        ctx[i].Program = ctx[0].Program;
-        if (i > 0) {
-            for(int k = 0; k < 7; ++k) {
-                ctx[i].Kernels[k] = ctx[0].Kernels[k];
-            }
-        }
-        if ((ret = InitOpenCLGpu(i, opencl_ctx, &ctx[i])) != OCL_ERR_SUCCESS) {
+        if ((ret = InitOpenCLGpu(i, opencl_ctx, &ctx[i], source_code.c_str())) != OCL_ERR_SUCCESS) {
             return ret;
         }
     }
