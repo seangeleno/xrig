@@ -22,6 +22,7 @@
  */
 
 #include <cmath>
+#include <uv.h>
 
 #ifdef __GNUC__
 #   include <mm_malloc.h>
@@ -275,6 +276,18 @@ void Workers::onResult(uv_async_t *handle)
 void Workers::onReport(uv_timer_t *handle)
 {
     m_hashrate->print();
+}
+
+
+bool Workers::isDead(int threadId)
+{
+    Handle *handle = m_handles[threadId];
+
+    if (m_active && handle->worker()->uptime() > 30 && !isnan(m_hashrate->calc(threadId, Hashrate::ShortInterval))) {
+        return true;
+    }
+
+    return false;
 }
 
 

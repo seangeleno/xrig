@@ -50,6 +50,7 @@ public:
     static void setJob(const Job &job);
     static void stop();
     static void submit(const Job &result);
+    static bool isDead(int threadId);
 
     static inline bool isEnabled()                               { return m_enabled; }
     static inline bool isOutdated(uint64_t sequence)             { return m_sequence.load(std::memory_order_relaxed) != sequence; }

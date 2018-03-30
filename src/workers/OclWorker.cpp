@@ -24,7 +24,7 @@
 
 
 #include <thread>
-
+#include <uv.h>
 
 #include "amd/OclGPU.h"
 #include "crypto/CryptoNight.h"
@@ -33,6 +33,7 @@
 #include "workers/OclThread.h"
 #include "workers/Handle.h"
 #include "workers/Workers.h"
+#include "log/Log.h"
 
 
 OclWorker::OclWorker(Handle *handle) :
@@ -44,7 +45,8 @@ OclWorker::OclWorker(Handle *handle) :
     m_timestamp(0),
     m_count(0),
     m_sequence(0),
-    m_blob()
+    m_blob(),
+    m_start(0)
 {
     const OclThread *thread = handle->gpuThread();
 
@@ -57,6 +59,7 @@ OclWorker::OclWorker(Handle *handle) :
 void OclWorker::start()
 {
     cl_uint results[0x100];
+    m_start = uv_now(uv_default_loop());
 
     while (Workers::sequence() > 0) {
         if (Workers::isPaused()) {
@@ -67,6 +70,12 @@ void OclWorker::start()
 
             if (Workers::sequence() == 0) {
                 break;
+            }
+
+            if (Workers::isDead(m_id)) {
+                LOG_WARN("THREAD %zu FOUND DEAD, TRYING TO RECOVER...", m_id);
+                ReleaseOpenCLGpu(m_ctx);
+                InitOpenCLGpu(m_id, m_ctx);
             }
 
             consumeJob();
@@ -86,6 +95,12 @@ void OclWorker::start()
 
             storeStats();
             std::this_thread::yield();
+        }
+
+        if (Workers::isDead(m_id)) {
+            LOG_WARN("THREAD %zu FOUND DEAD, TRYING TO RECOVER...", m_id);
+            ReleaseOpenCLGpu(m_ctx);
+            InitOpenCLGpu(m_id, m_ctx);
         }
 
         consumeJob();

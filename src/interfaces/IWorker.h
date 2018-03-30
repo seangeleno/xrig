@@ -35,6 +35,7 @@ public:
 
     virtual uint64_t hashCount() const = 0;
     virtual uint64_t timestamp() const = 0;
+    virtual uint64_t uptime() 	 const = 0;
     virtual void start()               = 0;
 };
 

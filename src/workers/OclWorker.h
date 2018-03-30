@@ -26,6 +26,7 @@
 #define __OCLWORKER_H__
 
 #include <atomic>
+#include <uv.h>
 
 
 #include "interfaces/IWorker.h"
@@ -45,6 +46,7 @@ public:
 protected:
     inline uint64_t hashCount() const override { return m_hashCount.load(std::memory_order_relaxed); }
     inline uint64_t timestamp() const override { return m_timestamp.load(std::memory_order_relaxed); }
+    inline uint64_t uptime() const override { return (uv_now(uv_default_loop()) - m_start) / 1000; }
 
     void start() override;
 
@@ -68,6 +70,7 @@ private:
     uint64_t m_count;
     uint64_t m_sequence;
     uint8_t m_blob[96]; // Max blob size is 84 (75 fixed + 9 variable), aligned to 96. https://github.com/xmrig/xmrig/issues/1 Thanks fireice-uk.
+    uint64_t m_start;
 };
 
 
