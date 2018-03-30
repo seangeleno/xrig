@@ -153,7 +153,7 @@ void Hashrate::print()
 }
 
 
-void Hashrate::print(size_t threadId, int gpuId)
+void Hashrate::print(int threadId, int gpuId)
 {
     char num1[8];
     char num2[8];

@@ -109,7 +109,7 @@ void DonateStrategy::onJobReceived(Client *client, const Job &job)
 void DonateStrategy::onLoginSuccess(Client *client)
 {
     if (!isActive()) {
-        uv_timer_start(&m_timer, DonateStrategy::onTimer, DONATESTRATEGY_TIME, 0);
+        uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) DONATESTRATEGY_TIME, 0);
     }
 
     m_active = true;
@@ -125,7 +125,7 @@ void DonateStrategy::onResultAccepted(Client *client, const SubmitResult &result
 
 void DonateStrategy::idle()
 {
-    uv_timer_start(&m_timer, DonateStrategy::onTimer, DONATESTRATEGY_INTERVAL - DONATESTRATEGY_TIME, 0);
+    uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) (DONATESTRATEGY_INTERVAL - DONATESTRATEGY_TIME), 0);
 }
 
 

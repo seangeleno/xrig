@@ -55,7 +55,7 @@
 
 static inline void port_sleep(size_t sec)
 {
-    Sleep(sec * 1000);
+    Sleep((DWORD)sec * 1000);
 }
 
 static inline void create_directory(std::string dirname)
@@ -90,6 +90,9 @@ static inline void create_directory(std::string dirname)
 
 
 constexpr const char *kSetKernelArgErr = "Error %s when calling clSetKernelArg for kernel %d, argument %d.";
+
+cl_context opencl_ctx;
+std::string source_code;
 
 
 const char* err_to_str(cl_int ret)
@@ -281,7 +284,7 @@ inline static bool setKernelArgFromExtraBuffers(GpuContext *ctx, size_t kernel, 
 }
 
 
-size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx, const char* source_code)
+size_t InitOpenCLGpu(int index, GpuContext* ctx)
 {
     size_t MaximumWorkSize;
     cl_int ret;
@@ -377,6 +380,35 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx, const ch
         return OCL_ERR_API;
     }
 
+	// Create source
+	if (source_code.empty()) {
+		const char *cryptonightCL =
+#include "./opencl/cryptonight.cl"
+			;
+		const char *blake256CL =
+#include "./opencl/blake256.cl"
+			;
+		const char *groestl256CL =
+#include "./opencl/groestl256.cl"
+			;
+		const char *jhCL =
+#include "./opencl/jh.cl"
+			;
+		const char *wolfAesCL =
+#include "./opencl/wolf-aes.cl"
+			;
+		const char *wolfSkeinCL =
+#include "./opencl/wolf-skein.cl"
+			;
+
+		source_code = (cryptonightCL);
+		source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_WOLF_AES"), wolfAesCL);
+		source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_WOLF_SKEIN"), wolfSkeinCL);
+		source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_JH"), jhCL);
+		source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_BLAKE256"), blake256CL);
+		source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_GROESTL256"), groestl256CL);
+	}
+
     ctx->Program = clCreateProgramWithSource(opencl_ctx, 1, (const char**)&source_code, NULL, &ret);
     if (ret != CL_SUCCESS) {
         LOG_ERR("Error %s when calling clCreateProgramWithSource on the contents of cryptonight.cl", err_to_str(ret));
@@ -396,7 +428,8 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx, const ch
     std::ifstream clBinFile(cache_file, std::ofstream::in | std::ofstream::binary);
     if(!clBinFile.good())
     {
-        LOG_INFO("OpenCL device %u - Compiling code",ctx->deviceIdx);
+        LOG_DEBUG("OpenCL device %u - Compiling code",ctx->deviceIdx);
+
         ctx->Program = clCreateProgramWithSource(opencl_ctx, 1, (const char**)&source_code, NULL, &ret);
         if(ret != CL_SUCCESS)
         {
@@ -435,7 +468,6 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx, const ch
 
         cl_uint num_devices;
         clGetProgramInfo(ctx->Program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &num_devices,NULL);
-
 
         std::vector<cl_device_id> devices_ids(num_devices);
         clGetProgramInfo(ctx->Program, CL_PROGRAM_DEVICES, sizeof(cl_device_id)* devices_ids.size(), devices_ids.data(),NULL);
@@ -486,7 +518,6 @@ size_t InitOpenCLGpu(int index, cl_context opencl_ctx, GpuContext* ctx, const ch
         }
 
         std::ofstream file_stream;
-        std::cout<<"./cache/" + hash_hex_str + ".bin"<<std::endl;
         file_stream.open(cache_file, std::ofstream::out | std::ofstream::binary);
         file_stream.write(all_programs[dev_id], binary_sizes[dev_id]);
         file_stream.close();
@@ -611,7 +642,7 @@ void printPlatforms()
 
     char buf[128] = { 0 };
 
-    for (int i = 0; i < numPlatforms; i++) {
+    for (uint32_t i = 0; i < numPlatforms; i++) {
         if (clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, sizeof(buf), buf, nullptr) != CL_SUCCESS) {
             continue;
         }
@@ -637,7 +668,7 @@ int getAMDPlatformIdx()
     int platformIndex = -1;
     char buf[256] = { 0 };
 
-    for (int i = 0; i < numPlatforms; i++) {
+    for (uint32_t i = 0; i < numPlatforms; i++) {
         clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, sizeof(buf), buf, nullptr);
 
         if (strstr(buf, "Advanced Micro Devices") != nullptr) {
@@ -732,47 +763,37 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
         TempDeviceList[i] = DeviceIDList[ctx[i].deviceIdx];
     }
 
-    cl_context opencl_ctx = clCreateContext(nullptr, num_gpus, TempDeviceList, nullptr, nullptr, &ret);
+    opencl_ctx = clCreateContext(nullptr, (cl_uint)num_gpus, TempDeviceList, nullptr, nullptr, &ret);
     if(ret != CL_SUCCESS) {
         LOG_ERR("Error %s when calling clCreateContext.", err_to_str(ret));
         return OCL_ERR_API;
     }
 
-    const char *cryptonightCL =
-            #include "./opencl/cryptonight.cl"
-    ;
-    const char *blake256CL =
-            #include "./opencl/blake256.cl"
-    ;
-    const char *groestl256CL =
-            #include "./opencl/groestl256.cl"
-    ;
-    const char *jhCL =
-            #include "./opencl/jh.cl"
-    ;
-    const char *wolfAesCL =
-            #include "./opencl/wolf-aes.cl"
-    ;
-    const char *wolfSkeinCL =
-            #include "./opencl/wolf-skein.cl"
-    ;
-
-    std::string source_code(cryptonightCL);
-    source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_WOLF_AES"), wolfAesCL);
-    source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_WOLF_SKEIN"), wolfSkeinCL);
-    source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_JH"), jhCL);
-    source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_BLAKE256"), blake256CL);
-    source_code = std::regex_replace(source_code, std::regex("XMRIG_INCLUDE_GROESTL256"), groestl256CL);
-
     create_directory("./cache");
 
     for (int i = 0; i < num_gpus; ++i) {
-        if ((ret = InitOpenCLGpu(i, opencl_ctx, &ctx[i], source_code.c_str())) != OCL_ERR_SUCCESS) {
+		if ((ret = (cl_int) InitOpenCLGpu(i, &ctx[i])) != OCL_ERR_SUCCESS) {
             return ret;
         }
     }
 
     return OCL_ERR_SUCCESS;
+}
+
+size_t ReleaseOpenCLGpu(GpuContext* ctx)
+{
+	clReleaseCommandQueue(ctx->CommandQueues);
+	clReleaseMemObject(ctx->InputBuffer);
+	clReleaseMemObject(ctx->OutputBuffer);
+	for (size_t i = 0; i < 6; ++i) {
+		clReleaseMemObject(ctx->ExtraBuffers[i]);
+	}
+	clReleaseProgram(ctx->Program);
+	for (size_t i = 0; i < 7; ++i) {
+		clReleaseKernel(ctx->Kernels[i]);
+	}
+
+	return OCL_ERR_SUCCESS;
 }
 
 size_t XMRSetJob(GpuContext* ctx, uint8_t* input, size_t input_len, uint64_t target, uint32_t variant)
@@ -837,7 +858,7 @@ size_t XMRSetJob(GpuContext* ctx, uint8_t* input, size_t input_len, uint64_t tar
 
     // Branch 0-3
     for (size_t i = 0; i < 4; ++i) {
-        if (!setKernelArgFromExtraBuffers(ctx, 2, i + 2, i + 2)) {
+        if (!setKernelArgFromExtraBuffers(ctx, 2, (cl_uint)i + 2, i + 2)) {
             return OCL_ERR_API;
         }
     }

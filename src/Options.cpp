@@ -263,7 +263,9 @@ bool Options::getJSON(const char *fileName, rapidjson::Document &doc)
     uv_fs_t req;
     const int fd = uv_fs_open(uv_default_loop(), &req, fileName, O_RDONLY, 0644, nullptr);
     if (fd < 0) {
-        fprintf(stderr, "unable to open %s: %s\n", fileName, uv_strerror(fd));
+        if (fileName != Platform::defaultConfig()) {
+            fprintf(stderr, "unable to open %s: %s\n", fileName, uv_strerror(fd));
+        }
         return false;
     }
 

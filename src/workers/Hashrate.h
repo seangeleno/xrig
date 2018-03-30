@@ -42,7 +42,7 @@ public:
     double calc(size_t threadId, size_t ms) const;
     void add(size_t threadId, uint64_t count, uint64_t timestamp);
     void print();
-    void print(size_t threadId, int gpuId);
+    void print(int threadId, int gpuId);
     void stop();
     void updateHighest();
 

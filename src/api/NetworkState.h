@@ -37,7 +37,7 @@ class NetworkState
 public:
     NetworkState();
 
-    int connectionTime() const;
+	uint64_t connectionTime() const;
     uint32_t avgTime() const;
     uint32_t latency() const;
     void add(const SubmitResult &result, const char *error);
