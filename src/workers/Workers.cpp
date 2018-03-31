@@ -264,7 +264,7 @@ void Workers::onResult(uv_async_t *handle)
             }
 
             if (baton->errors > 0 && !baton->jobs.empty()) {
-                LOG_ERR("THREAD #%d COMPUTE ERROR", baton->jobs[0].threadId());
+                LOG_WARN("Thread #%d compute error (%d)", baton->jobs[0].threadId(), baton->errors);
             }
 
             delete baton;

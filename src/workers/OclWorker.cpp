@@ -119,7 +119,7 @@ void OclWorker::consumeJob()
     save(job);
 
 	if (Workers::isDead(m_id)) {
-		LOG_WARN("Thread %zu found dead, trying to recover...", m_id);
+		LOG_WARN("Thread #%d found dead, trying to recover...", m_id);
 		m_start = uv_now(uv_default_loop());
 		ReleaseOpenCLGpu(m_ctx);
 		InitOpenCLGpu(m_id, m_ctx);
