@@ -27,7 +27,7 @@
 #define APP_ID        "xrig"
 #define APP_NAME      "Xrig"
 #define APP_DESC      "Xrig cryptonight miner"
-#define APP_VERSION   "0.8.1"
+#define APP_VERSION   "0.8.2"
 #define APP_SITE      "https://github.com/robertarnesson/xrig/"
 #define APP_COPYRIGHT "Copyright (C) 2018 Robert Arnesson"
 
