@@ -167,7 +167,10 @@ void Network::onResultAccepted(Client *client, const SubmitResult &result, const
 
 void Network::setJob(Client *client, const Job &job)
 {
-    if (client->id() == -1) {
+    m_state.diff = job.diff();
+    Workers::setJob(job);
+
+    if (m_donate->isActive()) {
         return;
     }
 
@@ -177,9 +180,6 @@ void Network::setJob(Client *client, const Job &job)
     else {
         LOG_INFO("new job from %s:%d diff %d", client->host(), client->port(), job.diff());
     }
-
-    m_state.diff = job.diff();
-    Workers::setJob(job);
 }
 
 

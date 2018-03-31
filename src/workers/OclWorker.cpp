@@ -72,12 +72,6 @@ void OclWorker::start()
                 break;
             }
 
-            if (Workers::isDead(m_id)) {
-                LOG_WARN("THREAD %zu FOUND DEAD, TRYING TO RECOVER...", m_id);
-                ReleaseOpenCLGpu(m_ctx);
-                InitOpenCLGpu(m_id, m_ctx);
-            }
-
             consumeJob();
         }
 
@@ -95,12 +89,6 @@ void OclWorker::start()
 
             storeStats();
             std::this_thread::yield();
-        }
-
-        if (Workers::isDead(m_id)) {
-            LOG_WARN("THREAD %zu FOUND DEAD, TRYING TO RECOVER...", m_id);
-            ReleaseOpenCLGpu(m_ctx);
-            InitOpenCLGpu(m_id, m_ctx);
         }
 
         consumeJob();
@@ -130,7 +118,12 @@ void OclWorker::consumeJob()
 
     save(job);
 
-    if (resume(job)) {
+	if (Workers::isDead(m_id)) {
+		LOG_WARN("Thread %zu found dead, trying to recover...", m_id);
+		m_start = uv_now(uv_default_loop());
+		ReleaseOpenCLGpu(m_ctx);
+		InitOpenCLGpu(m_id, m_ctx);
+	} else if (resume(job)) {
         setJob();
         return;
     }

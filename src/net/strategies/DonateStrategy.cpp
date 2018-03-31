@@ -56,7 +56,9 @@ DonateStrategy::DonateStrategy(const char *agent, IStrategyListener *listener) :
         m_timer.data = this;
         uv_timer_init(uv_default_loop(), &m_timer);
 
-        connect();
+        m_active = true;
+        uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) DONATESTRATEGY_TIME, 0);
+		connect();
     }
 }
 
@@ -123,12 +125,6 @@ void DonateStrategy::onResultAccepted(Client *client, const SubmitResult &result
 }
 
 
-void DonateStrategy::idle()
-{
-    uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) (DONATESTRATEGY_INTERVAL - DONATESTRATEGY_TIME), 0);
-}
-
-
 void DonateStrategy::suspend()
 {
     if (m_client) {
@@ -138,7 +134,7 @@ void DonateStrategy::suspend()
     m_active = false;
     m_listener->onPause(this);
 
-    idle();
+    uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) (DONATESTRATEGY_INTERVAL - DONATESTRATEGY_TIME), 0);
 }
 
 

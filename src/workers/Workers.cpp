@@ -149,7 +149,7 @@ void Workers::printHashrate(bool detail)
 {
     if (detail) {
        for (const OclThread *thread : Options::i()->threads()) {
-            m_hashrate->print(thread->threadId(), thread->index());
+            m_hashrate->print(thread->threadId(), (int) thread->index());
         }
     }
 
@@ -223,7 +223,7 @@ void Workers::onReady(void *arg)
     auto handle = static_cast<Handle*>(arg);
     handle->setWorker(new OclWorker(handle));
 
-    handle->worker()->start();
+	handle->worker()->start();
 }
 
 
@@ -282,14 +282,12 @@ void Workers::onReport(uv_timer_t *handle)
 bool Workers::isDead(int threadId)
 {
     Handle *handle = m_handles[threadId];
-
-    if (m_active && handle->worker()->uptime() > 30 && !isnan(m_hashrate->calc(threadId, Hashrate::ShortInterval))) {
+	if (m_enabled && handle->worker()->uptime() > 30 && isnan(m_hashrate->calc(threadId, Hashrate::ShortInterval))) {
         return true;
     }
 
     return false;
 }
-
 
 void Workers::onTick(uv_timer_t *handle)
 {

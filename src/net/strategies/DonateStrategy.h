@@ -59,7 +59,6 @@ protected:
     void onResultAccepted(Client *client, const SubmitResult &result, const char *error) override;
 
 private:
-    void idle();
     void suspend();
 
     static void onTimer(uv_timer_t *handle);

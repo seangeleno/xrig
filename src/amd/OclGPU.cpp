@@ -286,20 +286,7 @@ inline static bool setKernelArgFromExtraBuffers(GpuContext *ctx, size_t kernel, 
 
 size_t InitOpenCLGpu(int index, GpuContext* ctx)
 {
-    size_t MaximumWorkSize;
     cl_int ret;
-
-    if ((ret = clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &MaximumWorkSize, NULL)) != CL_SUCCESS) {
-        LOG_ERR("Error %s when querying a device's max worksize using clGetDeviceInfo.", err_to_str(ret));
-        return OCL_ERR_API;
-    }
-
-    ctx->computeUnits = getDeviceMaxComputeUnits(ctx->DeviceID);
-    ctx->busId = getBusId(ctx->DeviceID);
-    ctx->deviceName = getDeviceName(ctx->DeviceID);
-
-    LOG_INFO(Options::i()->colors() ? "\x1B[01;37m#%d\x1B[0m, GPU \x1B[01;37m#%zu\x1B[0m \x1B[01;32m%s\x1B[0m, intensity: \x1B[01;37m%zu\x1B[0m (%zu/%zu), cu: \x1B[01;37m%d"  : "#%d, GPU #%zu (%s), intensity: %zu (%zu/%zu), cu: %d",
-        index, ctx->deviceIdx, ctx->deviceName.c_str(), ctx->rawIntensity, ctx->workSize, MaximumWorkSize, ctx->computeUnits);
 
 #   ifdef CL_VERSION_2_0
     const cl_queue_properties CommandQueueProperties[] = { 0, 0, 0 };
@@ -771,7 +758,21 @@ size_t InitOpenCL(GpuContext* ctx, size_t num_gpus, size_t platform_idx)
 
     create_directory("./cache");
 
+	size_t MaximumWorkSize = 0;
+
     for (int i = 0; i < num_gpus; ++i) {
+		if (clGetDeviceInfo(ctx->DeviceID, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &MaximumWorkSize, NULL) != CL_SUCCESS) {
+			LOG_ERR("Failed to query device's max worksize using");
+			MaximumWorkSize = 0;
+		}
+		
+		ctx[i].computeUnits = getDeviceMaxComputeUnits(ctx[i].DeviceID);
+		ctx[i].busId = getBusId(ctx[i].DeviceID);
+		ctx[i].deviceName = getDeviceName(ctx[i].DeviceID);
+
+		LOG_INFO(Options::i()->colors() ? "\x1B[01;37m#%d\x1B[0m, GPU \x1B[01;37m#%zu\x1B[0m \x1B[01;32m%s\x1B[0m, intensity: \x1B[01;37m%zu\x1B[0m (%zu/%zu), cu: \x1B[01;37m%d" : "#%d, GPU #%zu (%s), intensity: %zu (%zu/%zu), cu: %d",
+			i, ctx[i].deviceIdx, ctx[i].deviceName.c_str(), ctx[i].rawIntensity, ctx[i].workSize, MaximumWorkSize, ctx[i].computeUnits);
+
 		if ((ret = (cl_int) InitOpenCLGpu(i, &ctx[i])) != OCL_ERR_SUCCESS) {
             return ret;
         }
