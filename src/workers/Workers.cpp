@@ -282,7 +282,7 @@ void Workers::onReport(uv_timer_t *handle)
 bool Workers::isDead(int threadId)
 {
     Handle *handle = m_handles[threadId];
-	if (m_enabled && handle->worker()->uptime() > 30 && isnan(m_hashrate->calc(threadId, Hashrate::ShortInterval))) {
+	if (m_enabled && handle->worker()->uptime() > 30 && std::isnan(m_hashrate->calc(threadId, Hashrate::ShortInterval))) {
         return true;
     }
 
