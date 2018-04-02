@@ -9,7 +9,6 @@ include (CheckIncludeFile)
 
 
 set(HEADERS
-    src/3rdparty/align.h
     src/3rdparty/sha256.h
     src/amd/cryptonight.h
     src/amd/Adl.h

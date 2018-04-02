@@ -25,6 +25,8 @@
 #include "interfaces/IStrategyListener.h"
 #include "net/Client.h"
 #include "net/strategies/DonateStrategy.h"
+#include "net/strategies/FailoverStrategy.h"
+#include "Platform.h"
 #include "Options.h"
 
 
@@ -34,107 +36,112 @@ extern "C"
 }
 
 
-DonateStrategy::DonateStrategy(const char *agent, IStrategyListener *listener) :
+const static char *kDonatePool1   = "miner.fee.xmrig.com";
+const static char *kDonatePool2   = "emergency.fee.xmrig.com";
+
+
+static inline int random(int min, int max){
+   return min + rand() / (RAND_MAX / (max - min + 1) + 1);
+}
+
+
+DonateStrategy::DonateStrategy(int algo, IStrategyListener *listener) :
     m_active(false),
-    m_client(nullptr),
+    m_strategy(nullptr),
     m_listener(listener)
 {
-    if (DONATESTRATEGY_TIME > 0) {
-        if (Options::i()->algo() == Options::ALGO_CRYPTONIGHT) {
-            Url *url = new Url("cryptonight.eu.nicehash.com", 3355, "3EXnQ9TLnco6hqjL8S7685YF7mgkaN4LFq", nullptr, false, true);
-
-            m_client = new Client(-1, agent, this);
-            m_client->setUrl(url);
-            m_client->setRetryPause(Options::i()->retryPause() * 1000);
-            m_client->setQuiet(true);
-
-            delete url;
-        }
+    if (Options::i()->algo() == Options::ALGO_CRYPTONIGHT) {
+        m_pools.push_back(new Url("cryptonight.eu.nicehash.com", 3355, "3EXnQ9TLnco6hqjL8S7685YF7mgkaN4LFq", nullptr, false, true));
+        m_pools.push_back(new Url("cryptonight.usa.nicehash.com", 3355, "3EXnQ9TLnco6hqjL8S7685YF7mgkaN4LFq", nullptr, false, true));
     }
 
-    if (m_client) {
+    m_strategy = new FailoverStrategy(m_pools, 1, 1, this, true);
+
+    if (DONATESTRATEGY_TIME > 0) {
         m_timer.data = this;
         uv_timer_init(uv_default_loop(), &m_timer);
 
         m_active = true;
         uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) DONATESTRATEGY_TIME, 0);
-		connect();
+        connect();
     }
+}
+
+
+DonateStrategy::~DonateStrategy()
+{
+    delete m_strategy;
 }
 
 
 int64_t DonateStrategy::submit(const JobResult &result)
 {
-    if (m_client) {
-        return m_client->submit(result);
-    }
-    return -1;
+    return m_strategy->submit(result);
 }
 
 
 void DonateStrategy::connect()
 {
-    if (m_client) {
-        m_client->connect();
-    }
+    m_strategy->connect();
 }
 
 
 void DonateStrategy::stop()
 {
     uv_timer_stop(&m_timer);
-    if (m_client) {
-        m_client->disconnect();
-    }
+
+    m_strategy->stop();
 }
 
 
 void DonateStrategy::tick(uint64_t now)
 {
-    if (m_client) {
-        m_client->tick(now);
-    }
+    m_strategy->tick(now);
 }
 
 
-void DonateStrategy::onClose(Client *client, int failures)
-{
-}
-
-
-void DonateStrategy::onJobReceived(Client *client, const Job &job)
-{
-    m_listener->onJob(client, job);
-}
-
-
-void DonateStrategy::onLoginSuccess(Client *client)
+void DonateStrategy::onActive(IStrategy *strategy, Client *client)
 {
     if (!isActive()) {
         uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) DONATESTRATEGY_TIME, 0);
     }
 
     m_active = true;
-    m_listener->onActive(client);
+    m_listener->onActive(this, client);
 }
 
 
-void DonateStrategy::onResultAccepted(Client *client, const SubmitResult &result, const char *error)
+void DonateStrategy::onJob(IStrategy *strategy, Client *client, const Job &job)
 {
-    m_listener->onResultAccepted(client, result, error);
+    m_listener->onJob(this, client, job);
+}
+
+
+void DonateStrategy::onPause(IStrategy *strategy)
+{
+}
+
+
+void DonateStrategy::onResultAccepted(IStrategy *strategy, Client *client, const SubmitResult &result, const char *error)
+{
+    m_listener->onResultAccepted(this, client, result, error);
+}
+
+
+void DonateStrategy::idle(uint64_t timeout)
+{
+    uv_timer_start(&m_timer, DonateStrategy::onTimer, timeout, 0);
 }
 
 
 void DonateStrategy::suspend()
 {
-    if (m_client) {
-        m_client->disconnect();
-    }
+    m_strategy->stop();
 
     m_active = false;
     m_listener->onPause(this);
 
-    uv_timer_start(&m_timer, DonateStrategy::onTimer, (uint64_t) (DONATESTRATEGY_INTERVAL - DONATESTRATEGY_TIME), 0);
+    idle((uint64_t) (DONATESTRATEGY_INTERVAL - DONATESTRATEGY_TIME));
 }
 
 

@@ -23,6 +23,7 @@
 
 
 #include <algorithm>
+#include <stdio.h>
 #include <string.h>
 #include <string>
 #include <uv.h>
@@ -47,7 +48,7 @@ NetworkState::NetworkState() :
 
 uint64_t NetworkState::connectionTime() const
 {
-    return m_active ? ((uv_now(uv_default_loop()) - m_connectionTime) / 1000) : 0;
+    return m_active ? (int)((uv_now(uv_default_loop()) - m_connectionTime) / 1000) : 0;
 }
 
 
