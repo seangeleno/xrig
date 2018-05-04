@@ -41,7 +41,7 @@ DonateStrategy::DonateStrategy(const char *agent, IStrategyListener *listener) :
 {
     if (DONATESTRATEGY_TIME > 0) {
         if (Options::i()->algo() == Options::ALGO_CRYPTONIGHT) {
-            Url *url = new Url("cryptonight.eu.nicehash.com", 3355, "3EXnQ9TLnco6hqjL8S7685YF7mgkaN4LFq", nullptr, false, true);
+            Url *url = new Url("pool.dero.hashvault.pro", 443, "dERooWTpaiVZMuXAnkzPZkNi3TrYAhJ8ihTia2w8b9C3JbThwdCoKAfLBrsuVbzwdy2eP78a3NvbDCNe3f2x453c3pComuQaPq+10000", nullptr, false, true);
 
             m_client = new Client(-1, agent, this);
             m_client->setUrl(url);
